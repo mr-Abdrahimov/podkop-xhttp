@@ -1,0 +1,324 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLESS → Xray Config Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 2.2em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+        .content { padding: 40px; }
+        .input-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+            font-family: monospace;
+        }
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(79, 172, 254, 0.4); }
+        .btn:active { transform: translateY(0); }
+        .output {
+            margin-top: 30px;
+            display: none;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #f8f8f2;
+            padding: 25px;
+            border-radius: 12px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #4facfe;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .copy-btn:hover { background: #3d9af5; }
+        .status {
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: 500;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        @media (max-width: 600px) {
+            .content { padding: 20px; }
+            .header h1 { font-size: 1.8em; }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 VLESS → Xray Config</h1>
+            <p>Вставь vless:// ссылку → Получи готовый config.json для OpenWrt + Podkop</p>
+        </div>
+        <div class="content">
+            <div class="input-group">
+                <label for="vlessUrl">VLESS URL (вставь полностью):</label>
+                <textarea id="vlessUrl" rows="3" placeholder="vless://xxxxxx@example.ru:443?fp=random&host=example.ru&mode=auto&path=%2F&pbk=r94ZT0dd3zRSTHsZ3BHbuaD6N-Y2ZGWXKOr7h7SWaks&security=reality&sid=a0&sni=eh.vk.com&spx=%2FN6QOC5Pn5Fs1ftq&type=xhttp"></textarea>
+            </div>
+            <button class="btn" onclick="generateConfig()">🎯 Сгенерировать config.json</button>
+
+            <div id="status" class="status" style="display: none;"></div>
+
+            <div id="output" class="output">
+                <pre id="configJson"><code></code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            setTimeout(() => status.style.display = 'none', 5000);
+        }
+
+        function parseVlessUrl(vlessUrl) {
+            try {
+                // Убираем vless:// и хеш в конце
+                let cleanUrl = vlessUrl.replace('vless://', '').split('#')[0];
+
+                // Декодируем URL-encoded символы
+                cleanUrl = decodeURIComponent(cleanUrl);
+
+                // Парсим как обычную строку (не base64)
+                const atIndex = cleanUrl.indexOf('@');
+                if (atIndex === -1) throw new Error('Не найден символ @ в VLESS URL');
+
+                const uuid = cleanUrl.substring(0, atIndex);
+                const rest = cleanUrl.substring(atIndex + 1);
+
+                const questionIndex = rest.indexOf('?');
+                const serverPort = questionIndex !== -1 ? rest.substring(0, questionIndex) : rest;
+
+                const [server, portStr] = serverPort.split(':');
+                const port = parseInt(portStr);
+
+                // Парсим параметры
+                const paramsStr = questionIndex !== -1 ? rest.substring(questionIndex + 1) : '';
+                const params = new URLSearchParams(paramsStr);
+
+                return {
+                    uuid: uuid,
+                    server: server,
+                    port: port,
+                    type: params.get('type') || 'tcp',
+                    security: params.get('security') || 'auto',
+                    sni: params.get('sni') || server,
+                    fp: params.get('fp') || 'chrome',
+                    pbk: params.get('pbk'),
+                    sid: params.get('sid'),
+                    spx: params.get('spx'),
+                    path: params.get('path') || '/',
+                    host: params.get('host') || server,
+                    mode: params.get('mode') || 'auto'
+                };
+            } catch (e) {
+                throw new Error('Ошибка парсинга VLESS URL: ' + e.message);
+            }
+        }
+
+        function buildXrayConfig(vless) {
+            let realitySettings = {};
+            let network = 'tcp';
+            let xhttpSettings = {};
+
+            // REALITY + XHTTP детекция
+            if (vless.pbk && vless.sid && vless.type === 'xhttp') {
+                realitySettings = {
+                    "serverName": vless.sni,
+                    "shortId": vless.sid,
+                    "publicKey": vless.pbk,
+                    "fingerprint": vless.fp,
+                    ...(vless.spx && { "spiderX": vless.spx })
+                };
+                network = 'xhttp';
+                xhttpSettings = {
+                    "host": vless.host,
+                    "path": vless.path,
+                    "mode": vless.mode
+                };
+            }
+
+            const outbound = {
+                "tag": "proxy",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [{
+                        "address": vless.server,
+                        "port": vless.port,
+                        "users": [{
+                            "id": vless.uuid,
+                            "encryption": "none"
+                        }]
+                    }]
+                },
+                "streamSettings": {
+                    "network": network,
+                    ...(Object.keys(realitySettings).length > 0 && {
+                        "security": "reality",
+                        "realitySettings": realitySettings
+                    }),
+                    ...(Object.keys(xhttpSettings).length > 0 && {
+                        "xhttpSettings": xhttpSettings
+                    })
+                }
+            };
+
+            return {
+                "log": { "loglevel": "warning" },
+                "inbounds": [{
+                    "tag": "socks-local",
+                    "port": 10808,
+                    "listen": "127.0.0.1",
+                    "protocol": "socks",
+                    "settings": { "udp": true },
+                    "sniffing": {
+                        "enabled": true,
+                        "destOverride": ["tls", "http", "quic"]
+                    }
+                }],
+                "outbounds": [outbound, {
+                    "tag": "direct",
+                    "protocol": "freedom",
+                    "settings": {}
+                }, {
+                    "tag": "block",
+                    "protocol": "blackhole",
+                    "settings": { "response": { "type": "none" } }
+                }],
+                "routing": {
+                    "rules": [{
+                        "type": "field",
+                        "inboundTag": ["socks-local"],
+                        "outboundTag": "proxy"
+                    }]
+                }
+            };
+        }
+
+        function generateConfig() {
+            const vlessUrl = document.getElementById('vlessUrl').value.trim();
+            if (!vlessUrl) {
+                showStatus('❌ Вставь vless:// ссылку!', 'error');
+                return;
+            }
+
+            if (!vlessUrl.startsWith('vless://')) {
+                showStatus('❌ Неверный формат! Нужна vless:// ссылка', 'error');
+                return;
+            }
+
+            try {
+                const config = parseVlessUrl(vlessUrl);
+                const jsonConfig = buildXrayConfig(config);
+                displayConfig(jsonConfig);
+                showStatus('✅ Config готов! Копируй в /etc/xray/config.json', 'success');
+            } catch (error) {
+                showStatus(`❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        function displayConfig(config) {
+            const pre = document.getElementById('configJson');
+            const code = pre.querySelector('code');
+            code.textContent = JSON.stringify(config, null, 2);
+            pre.querySelector('.copy-btn')?.remove();
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.textContent = '📋 Копировать';
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(JSON.stringify(config, null, 2)).then(() => {
+                    copyBtn.textContent = '✅ Скопировано!';
+                    setTimeout(() => copyBtn.textContent = '📋 Копировать', 2000);
+                });
+            };
+            pre.appendChild(copyBtn);
+
+            document.getElementById('output').style.display = 'block';
+        }
+
+        // Enter для генерации
+        document.getElementById('vlessUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') generateConfig();
+        });
+
+        // Paste автофокус
+        document.getElementById('vlessUrl').addEventListener('paste', () => {
+            setTimeout(generateConfig, 100);
+        });
+    </script>
+</body>
+</html>
