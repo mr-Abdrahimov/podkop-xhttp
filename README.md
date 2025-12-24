@@ -12,7 +12,8 @@ opkg install xray-core nano
 ```
 
 ## ⚙️ 2. Конфигурация Xray
-Качаем файл vless-to-xray-generator.html и создаём конфиг для Xray вида:
+Открываем https://mr-abdrahimov.github.io/podkop-xhttp/vless-to-xray-generator.html и создаём конфиг для Xray
+Далее в роутере редактируем файл и вставляем наш сгенерированный конфиг
 ```bash
 nano /etc/xray/config.json
 ```
@@ -74,7 +75,7 @@ curl --socks5 127.0.0.1:10808 https://ifconfig.me
 
 ## 🔗 6. Подключение к Podkop
 
-### Вариант A: JSON (Outbound Configuration)
+### JSON (Outbound Configuration)
 ```json
 {
   "type": "socks",
@@ -82,15 +83,6 @@ curl --socks5 127.0.0.1:10808 https://ifconfig.me
   "server": "127.0.0.1",
   "server_port": 10808
 }
-```
-
-### Вариант B: SOCKS5 (проще)
-```
-Имя: vless-xhttp
-Тип: SOCKS5  
-Адрес: 127.0.0.1
-Порт: 10808
-UDP: ✅
 ```
 
 ## 🎯 7. Маршрутизация в Podkop
